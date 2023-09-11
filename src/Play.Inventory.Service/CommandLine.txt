@@ -1,0 +1,7 @@
+//Add Play.Common package
+cd src/Play.Inventory.Service
+dotnet add package Play.Common
+dotnet add package Play.Catalog.Contracts
+
+//Pack Play.Inventory.Contracts
+dotnet pack -o ../../../packages/
