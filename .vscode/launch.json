@@ -9,7 +9,6 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            // If you have changed target frameworks, make sure to update the program path.
             "program": "${workspaceFolder}/src/Play.Inventory.Service/bin/Debug/net7.0/Play.Inventory.Service.dll",
             "args": [],
             "cwd": "${workspaceFolder}/src/Play.Inventory.Service",
@@ -26,6 +25,15 @@
             "type": "coreclr",
             "request": "attach",
             "processId": "${command:pickProcess}"
+        },
+        {
+            "name": "Docker .NET Launch",
+            "type": "docker",
+            "request": "launch",
+            "preLaunchTask": "docker-run: debug",
+            "netCore": {
+                "appProject": "${workspaceFolder}/src/Play.Inventory.Service/Play.Inventory.Service.csproj"
+            }
         }
     ]
 }
