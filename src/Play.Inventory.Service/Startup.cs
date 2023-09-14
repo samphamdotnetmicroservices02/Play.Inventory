@@ -40,7 +40,7 @@ namespace Play.Inventory.Service
             services.AddMongo()
                     .AddMongoRepository<InventoryItem>("inventoryitems")
                     .AddMongoRepository<CatalogItem>("catalogitems")
-                    .AddMassTransitWithRabbitMq(retryConfigurator =>
+                    .AddMassTransitWithMessageBroker(Configuration, retryConfigurator =>
                     {
                         /*
                         * anytime a message is not able to be consumed by consumer, it will be retried three times, and we'd have 5 seconds delay
@@ -53,7 +53,7 @@ namespace Play.Inventory.Service
                         */
                         retryConfigurator.Ignore(typeof(UnknownItemException));
 
-                        
+
                     })
                     .AddJwtBearerAuthentication();
 
