@@ -30,7 +30,13 @@ dotnet nuget push ../packages/Play.Inventory.Contracts.$version.nupkg --api-key 
 ```powershell
 $env:GH_OWNER="samphamdotnetmicroservices02"
 $env:GH_PAT="[PAT HERE]"
+$acrName="samphamplayeconomyacr"
+
 docker build --secret id=GH_OWNER --secret id=GH_PAT -t play.inventory:$version .
+
+or
+
+docker build --secret id=GH_OWNER --secret id=GH_PAT -t "$acrName.azurecr.io/play.inventory:$version" .
 
 -t is tack, tack is really a human friendly way to identify your Docker image, in this case, in your 
 box. And it is composed of two parts. The first part is going to be kind of the name of image, and
@@ -42,7 +48,14 @@ is just going to be ".", this "." represents the current directory
 ```mac
 export GH_OWNER="samphamdotnetmicroservices02" 
 export GH_PAT="[PAT HERE]"
+acrName="samphamplayeconomyacr"
+
 docker build --secret id=GH_OWNER --secret id=GH_PAT -t play.inventory:$version .
+
+or
+
+docker build --secret id=GH_OWNER --secret id=GH_PAT -t "$acrName.azurecr.io/play.inventory:$version" .
+
 check this link for more details about env variable on mac
 https://phoenixnap.com/kb/set-environment-variable-mac
 ```
@@ -85,4 +98,41 @@ And lastly we have to specify the docker image that we want to run (play.invento
 
 ```mac
 docker run -it --rm -p 5004:5004 --name inventory -e MongoDbSettings__Host=mongo -e RabbitMqSettings__Host=rabbitmq --network playinfra_default play.inventory:$version
+```
+
+## Publish the image
+```powershell
+$acrName="samphamplayeconomyacr"
+
+az acr login --name $acrName
+
+docker tag play.inventory:$version "$acrName.azurecr.io/play.inventory:$version"
+
+docker images (check your images for ACR)
+
+docker push "$acrName.azurecr.io/play.inventory:$version" (go to your ACR -> Repositories to check your images)
+
+
+az acr login: in order to be able to publish anything into ACR, you will have to first log in into it. Because remember that an ACR is a private repository.
+So people cannot just connect to it from anywhere without providing credentials. It is not a repository like it will be the case in Docker Hub.
+This is private, so you need credentials to be able to access it. So to do that, what you can do is use the AZ ACR login command from Azure CLI
+
+docker tag play.inventory:$version: The next thing we want to do is a retagging of your image, so that it is ready to be published to ACR. In order to be
+able to publish these to ACR, you have to have the name of the repository of your image, has to match a combination of the login server of your ACR
+and the accurate repository name (samphamplayeconomyacr.azurecr.io/play.inventory:$version, samphamplayeconomyacr.azurecr.io comes from your login server of ACR)
+
+docker push: publishing image
+```
+
+```mac
+acrName="samphamplayeconomyacr"
+
+az acr login --name $acrName
+
+docker tag play.inventory:$version "$acrName.azurecr.io/play.inventory:$version"
+
+docker images (check your images for ACR)
+
+docker push "$acrName.azurecr.io/play.inventory:$version" (go to your ACR -> Repositories to check your images)
+
 ```
