@@ -20,6 +20,7 @@ using Polly.CircuitBreaker;
 using Polly.Extensions.Http;
 using Polly.Timeout;
 using GreenPipes.Configurators;
+using Play.Common.HealthChecks;
 
 namespace Play.Inventory.Service
 {
@@ -64,6 +65,9 @@ namespace Play.Inventory.Service
             {
                 c.SwaggerDoc("v1", new OpenApiInfo { Title = "Play.Inventory.Service", Version = "v1" });
             });
+
+            services.AddHealthChecks()
+                .AddMongoDb();
         }
 
 
@@ -94,6 +98,8 @@ namespace Play.Inventory.Service
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
+
+                endpoints.MapPlayEconomyHealthCheck();
             });
         }
 
