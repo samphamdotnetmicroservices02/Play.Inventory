@@ -149,3 +149,128 @@ if you do not use MongoDb and RabbitMQ from Play.Infra, you can remove --network
 
 docker run -it --rm -p 5004:5004 --name inventory -e MongoDbSettings__ConnectionString=$cosmosDbConnString -e ServiceBusSetting__ConnectionString=$serviceBusConnString -e ServiceSettings__MessageBroker="SERVICEBUS" play.inventory:$version
 ```
+
+## Creating the Kubernetes namespace
+```powershell
+$namespace="inventory"
+kubectl create namespace $namespace
+
+namespace: the namespace is nothing more than a way to separate the resources that belong to different applications in your Kubernetes cluster. So usallly 
+you will have one namespace paired microservice in this case, we will put all the resources that belong to that specific microservice.
+```
+
+```mac
+namespace="inventory"
+kubectl create namespace $namespace
+```
+
+
+## Creating the Kubernetes pod
+```powershell
+kubectl apply -f ./kubernetes/inventory.yaml -n $namespace
+
+kubectl get pods -n $namespace
+kubectl get pods -n $namespace -w
+READY 1/1: means that we have one container inside the pod, and that one pod is ready
+AGE: is the time your pod run from the past to the current time
+-w: listen to it until a new version deployment is alive.
+
+kubectl get services -n $namespace
+TYPE: ClusterIP is the default type, which is ClusterIP meaning that it gets an IP that is local to the cluster
+(CLUSTER-IP), so only any other ports within the cluster can reachout these microservice right now. And it is
+listening in port 80. External-IP needs to define "spec.type: LoadBalancer" in yaml file
+
+
+kubectl logs catalog-deployment-5767558688-p9zh2 -n $namespace
+catalog-deployment-5767558688-p9zh2: is the name when you run "kubectl get pods -n $namespace"
+
+kubectl logs ...: You want to know what is going on with that pod, what is happening inside that pod
+
+kubectl describe pod catalog-deployment-5767558688-p9zh2 -n $namespace
+
+describe pod: this will give you even more insights into definition of the pod.
+```
+
+## Creating the Azure Managed Identity and grating it access to Key Vault secrets
+from https://learn.microsoft.com/en-gb/azure/aks/workload-identity-deploy-cluster
+
+```powershell
+$appname="playeconomy"
+$keyVaultName="samphamplayeconomykv"
+$namespace="inventory"
+
+az identity create --resource-group $appname --name $namespace
+
+$IDENTITY_CLIENT_ID=az identity show -g $appname -n $namespace --query clientId -otsv
+
+az keyvault set-policy -n $keyVaultName --secret-permissions get list --spn $IDENTITY_CLIENT_ID
+
+if you receive an error like "AADSTS530003: Your device is required to be managed to access this resource."
+after running "az keyvault set-policy ...", try to run it on Cloud
+
+check your Azure Managed Identity by navigate to resource group -> $keyVaultName -> AccessPolicies to see the $namespace have permission Get, List. And you can see
+the $namespace in resource group -> $namespace
+
+az identity create: create one of Azure managed identities
+--name: the name of the managed identity.
+
+after run "az identity create ...", we have the "clientId" from the response. What we want to do is to retrieve what is known as the identity clientId,
+which we are gonna be using to assign permissions into our key vault.
+
+az identity show: is a command to retrieve details about a managed identity that we have already created. 
+
+-n from "az identity show -g $appname -n $namespace" is the name of identity
+
+--query clientId: we want to say that we do not want to just query all the details about this identity, we want to the specific property of that identity. So we
+will say query and retrive the clientId
+
+-otsv: we want the "--query clientId" in a format otsv that is easy to parse for other commands.
+
+az keyvault set-policy: after run "$IDENTITY_CLIENT_ID=az identity ...", use the clientId to grant access to our key vault secrets or to our Azure key vault
+-n: the name of key vault
+--secret-persmissions get list --spn $IDENTITY_CLIENT_ID: "--secret-persmissions" states that we are going to be grarting permissions into our key vault secrets. 
+It could be cetificates, it could be keys or it could be secrets. In this case it is going to be just secrets. And the permission we want to grant is "get list".
+"--spn $IDENTITY_CLIENT_ID" And then the identity or the service principle that we want to grant these permissions into, is going to be our identity clientId
+```
+
+```mac
+appname="playeconomy"
+keyVaultName="samphamplayeconomykv"
+namespace="inventory"
+
+az identity create --resource-group $appname --name $namespace
+
+export IDENTITY_CLIENT_ID="$(az identity show -g $appname -n $namespace --query clientId -otsv)"
+
+az keyvault set-policy -n $keyVaultName --secret-permissions get list --spn $IDENTITY_CLIENT_ID
+```
+
+## Establish the federated identity credential
+```powershell
+$aksName="samphamplayeconomyaks"
+
+$AKS_OIDC_ISSUER=az aks show -n $aksName -g $appname --query "oidcIssuerProfile.issuerUrl" -otsv
+
+az identity federated-credential create --name $namespace --identity-name $namespace --resource-group $appname --issuer $AKS_OIDC_ISSUER --subject "system:serviceaccount:${namespace}:${namespace}-serviceaccount" --audience api://AzureADTokenExchange
+
+check your result: navigate your resource group $namespace, in this case is identity (Managed Identity) -> Federated credentials tab
+
+retrieve this oidcIssuerProfile.issuerUrl: the only reason why we are able to query this is because when we created the cluster, if you remember we asked it
+to enable these OIDC issuer at cluster creation time. So you have to do it that way, otherwise it will not work.
+
+az identity federated-credential... --name: the name of our managed identity. So that name in our case is namespace which in my case is "identity". Because it is
+the identity microservice. This is the name of the federated credential
+
+az identity federated-credential... --identity-name: the name of managed identity, the identity name. So for that, we are going to be putting again, namespace.
+This is the name of the managed identity we already created before
+
+az identity federated-credential... --subject: your service account that you just created. 
+"system:serviceaccount:${namespace}:${namespace}-serviceaccount", the first $namespace, general case is just identity, and the second $namespace is the actual name of the service account which lives in kubernetes/identity.yaml and the ${namespace}-serviceaccount lives in $namespace (identity)
+```
+
+```mac
+aksName="samphamplayeconomyaks"
+export AKS_OIDC_ISSUER="$(az aks show -n $aksName -g "${appname}" --query "oidcIssuerProfile.issuerUrl" -otsv)"
+
+az identity federated-credential create --name $namespace --identity-name $namespace --resource-group $appname --issuer $AKS_OIDC_ISSUER --subject "system:serviceaccount:${namespace}:${namespace}-serviceaccount" --audience api://AzureADTokenExchange
+```
