@@ -1,4 +1,140 @@
-#Kubernetes servicea account
+# apiVersion: this declares api version. So as with any other service, the Kubernetes API has versions. So you have to choose what version of API you're going
+# to target with your file. This case we're going to be using apps/v1 version where you say stable breaching at this point.
+apiVersion: apps/v1
+# kind: there's different types of objects in Kubernetes and by saying kind deployment, we're saying that we are actually creating a deployment object over
+# there
+kind: Deployment
+#metadata.name: these metadata name represents the name of these deployment in the Kubernetes. There's going to be tons of resources in Kubernetes. So you
+# have to assign a name today to the object. So in this case the name we're going to give it, it's going to be inventory deployment
+metadata:
+  name: inventory-deployment
+# spec: this is going to define the structure of this deployment. The details about this deployment.
+# spec.selector: this selector we have matchLabels, app: myapp. So what these selector means is that this deployment is going to be managing any of the
+# parts that have the label that has the name "app" and where the value for that label, that "app" label is going to be "myapp". Of course in our case,
+# we're going to be using a different label, which is going to be inventory, also that means that any part that has the inventory value in its "app" label
+# is going to be managed by this deployment. Remember that the deployment it's nothing more than a way to manage a bunch of parts. So the deployment
+# has to know which parts need to be manage. So that's how we do it.
+spec:
+  selector:
+    matchLabels:
+      app: inventory
+  # template: this template we have metadata.lables again. And these make sense because here's where we are declaring the template for the parts
+  # are going to created. And this template actually extends all the way to the end. So this is the entire template for the parts. So instead of describing
+  # one by one, each of the parts are going to created. We define a template for all of them. And the first part of that template is going to be the "labels"
+  # for these parts. In our case, that label is going to be inventory. So Kubernetes with the assign the inventory, the inventory value into "app" label for
+  # all the parts. And this is where things are start matching, because if these are the parts that have the "app" label with inventory value, then that is
+  # what matches with the "selector" that were defined before, where the deployment will be looking for all those parts with the "app" label and the
+  # inventory value to be able to manage them. So this (template.metadata.labels.app) has to match with this (selector.matchLabels.app)
+  template:
+    metadata:
+      labels:
+        app: inventory
+        # this requires from service account
+        azure.workload.identity/use: "true"
+    # Then we keep going down into the spec of our part itself. The first thing we're defining here is the containers. So which are going to be containers that
+    # are going to leave within this part. So the "name" that we are going to be assigning to our container is inventory, because it's going to be our
+    # inventory container. Now this name that we saying here has nothing to do with the other container. What really matters is the "image" name that you provide
+    # here (spec.containers.image). So what is going to be that image name? Run docker images and you will see your image name acr of inventory. This is an image
+    # that I'm asking Kubernetes to pull down into this part in the node.
+    spec:
+      # associate service account with every port that we create for the inventory microservice
+      serviceAccountName: inventory-serviceaccount
+      containers:
+        - name: inventory
+          image: samphamplayeconomyacr.azurecr.io/play.inventory:1.0.4
+          env:
+            - name: ServiceSettings__MessageBroker
+              value: SERVICEBUS
+            - name: ServiceSettings__KeyVaultName
+              value: samphamplayeconomykv
+            - name: ServiceSettings__Authority
+              value: https://samphamplayeconomyapigateway.eastus.cloudapp.azure.com/identity-svc
+
+            # this is the Kubernetes secrets, after we created secret from Key Vault, we no need the Kubernetes secrets
+            # - name: MongoDbSettings__ConnectionString
+            #   # valueFrom where we can use secret values
+            #   valueFrom:
+            #     secretKeyRef:
+            #       # inventory-secrets is the name of secret you create in Kubernetes, pls check README.
+            #       name: inventory-secrets
+            #       key: cosmosdb-connectionstring
+            # - name: ServiceBusSetting__ConnectionString
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: inventory-secrets
+            #       key: servicebus-connectionstring
+            # - name: IdentitySettings__AdminUserPassword
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: inventory-secrets
+            #       key: admin-password
+
+          # this resources is how you define how many resources can your Kubernetes ports use in the cluster, because you don't want them to go and start taking
+          # as many resources available, because you want to make sure that they are constained and the only use as much, in this case, memory and cpu as needed.
+          # In this case we are using by default 128 mebibytes. Where one mebibytes is equal to 1024 kibibytes. So similar to megabytes is just that one megabytes
+          # has 1000 kilobytes, and one mebibyte has 1024 kibibytes. It's kind of similar thing. And really how much do you need here? You'll have to be measuring
+          # later on, as you run your service, your microservice to understand exactly what it really needs.
+          # And the same as memory, you also can define a how much cpu you need here (resources.limits.cpu). And this is defined in what we call milli CPU units,
+          # where if you had a 1000 here, so if this is 1000, that means that this will use one entire CPU. You have 500m here, you ware saying that you need
+          # one half of the CPU, this port going to need half of a CPU. Now in our case from what I have measured for this container, the inventory container
+          # I know that we are not going to need more than 150m CPU. That should be enough for the container. And 128 megabytes should be also good enough.
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "150m"
+          # And then we are going to containerPort. So these's here we have to specify which is the port that our container is listening on. It's going to be
+          # listening on. And if you don't remember that you can go back to Docker file and the port we're using in dockerfile is 5004 (from ASPNETCORE_URLS=...:5004)
+          ports:
+            - containerPort: 5004
+
+          # Kubernetes health probes
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              # what is the port that has to be used to reach that end point
+              port: 5004
+            # this is because your microservice may take a little bit to boot, especially the very first time. And so there's no much of point of Kubernetes
+            # trying to invoke your endpoint if the microservices just getting started, It cannot be respond to any queries yet. I like to give it at least
+            # 10 seconds before the first time, like Kubernetes will start pinging this endpoint to see if the service is alive.
+            initialDelaySeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 5004
+            initialDelaySeconds: 10
+
+# this "---" is the way you can seperate resources within a single yaml file. You can create another file for this service
+---
+apiVersion: v1
+kind: Service
+#metadata.name: name of the service
+metadata:
+  name: inventory-service
+# spec.selector.app: just like we did with the deployment. in deployment we have to define how to select the port that this deployment is going to manage. In the
+# same way, we have to provide a selector in the service to define which are going to be the ports that this service is going to route a request into. As we know
+# for our ports (spec.template.metadata.labels.app) above, the path template defines the the "app" label with the inventory value. So this inventory value is the one
+# that we are going to meet in the definition of our service over here (spec.selector.app below)
+spec:
+  # exposing IP to the outside of cluster. If you've declared type LoadBalancer it means that Kubernetes has to reach out to the cloud provider, which is this case
+  # is going to be Azure Kubernetes service and it has to require that somehow Azure creates a public IP for our inventory microservice, so that all the people
+  # can reach out to it
+  # For Api Gateway, we are no longer need LoadBalancer bevause it's public IP, and the public IP will be handled
+  # by Api gateway, so we change it to ClusterIP. But the default is ClusterIP so you can remove this type label. So as I mentioned before, cluster IP just means
+  # that the service gets a local IP within the cluster, but it's not an IP that is public, it's not reachable from outside internet.
+  type: ClusterIP
+  selector:
+    app: inventory
+  ports:
+    # this ports is how we're going to expose our service to the outside world. So the first port here is the one that any other port within our cluster can use to
+    # reach out into our inventory microservice. And is also the port that will be available if somebody wants to reach out to microservice from the outside.
+    - port: 80
+      # the targetPort is the port that is behind the service is exposing (5004 comes from ports.containerPort above). So anytime any other port or any other
+      # application or client wants to reach out to the inventory microservice, they will have to do is by using port 80 in whichever the IP we accquired for this
+      # service and the service will go ahead and find any of the ports that match the inventory "app" label, and then it will route the request into port 5004
+      targetPort: 5004
+---
+
+#Kubernetes service account
 apiVersion: v1
 kind: ServiceAccount
 metadata:
