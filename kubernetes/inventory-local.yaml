@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-deployment
+spec:
+  selector:
+    matchLabels:
+      app: inventory
+  template:
+    metadata:
+      labels:
+        app: inventory
+    spec:
+      containers:
+        - name: inventory
+          image: play.inventory:1.0.4
+          env:
+            - name: RabbitMqSettings__Host
+              # for window open command prompt and run "ipconfig", choose IPV4
+              #  value: "172.26.112.1"
+              # for mac open wifi and and click details on your name of wifi you are connecting and check IP address
+              value: "192.168.1.13"
+            - name: MongoDbSettings__Host
+              # for window open command prompt and run "ipconfig", choose IPV4
+              #  value: "172.26.112.1"
+              # for mac open wifi and and click details on your name of wifi you are connecting and check IP address
+              # or call ifconfig on mac and choose "inet"
+              value: "192.168.1.13"
+            - name: ServiceSettings__Authority
+              value: http://playeconomyapigateway.com/identity-svc
+
+            - name: ServiceSettings__InternalHostAuthority
+              value: identity-service.identity.svc.cluster.local
+            - name: ServiceSettings__IsKubernetesLocal
+              value: "true"
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "150m"
+          ports:
+            - containerPort: 5004
+
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 5004
+            initialDelaySeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 5004
+            initialDelaySeconds: 10
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-service
+spec:
+  type: ClusterIP
+  selector:
+    app: inventory
+  ports:
+    - port: 80
+      targetPort: 5004
