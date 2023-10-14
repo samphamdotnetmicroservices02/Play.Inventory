@@ -344,3 +344,15 @@ helm list -n $namespace
 helm delete <release-name> -n $namespace
 helm repo update
 ```
+
+## Rollback the previous version using helm
+https://helm.sh/docs/helm/helm_rollback/
+
+```powershell
+helm history inventory-service -n $namespace (check your all revision numbers)
+helm rollback inventory-service -n $namespace (if you dont specify the revision number here, it will roll back to previous number)
+or 
+helm rollback inventory-service [REVISION] -n $namespace
+```
+
+When you roll back, helm will also increase your a number for revision
