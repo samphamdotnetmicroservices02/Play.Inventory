@@ -14,7 +14,7 @@ dotnet nuget push ..\packages\Play.Inventory.Contracts.$version.nupkg --api-key 
 --source "github" comes from Play.Infra
 ```
 
-```mac
+```zsh
 version="1.0.4"
 owner="samphamdotnetmicroservices02"
 gh_pat="[PAT HERE]"
@@ -45,7 +45,7 @@ the "." next to $version is the cecil file , the context for this docker build c
 is just going to be ".", this "." represents the current directory
 ```
 
-```mac
+```zsh
 export GH_OWNER="samphamdotnetmicroservices02"
 export GH_PAT="[PAT HERE]"
 acrName="samphamplayeconomyacr"
@@ -103,7 +103,7 @@ where all the other containers are running "playinfra_default (RabbitMq and Mong
 And lastly we have to specify the docker image that we want to run (play.inventory:$version)
 ```
 
-```mac
+```zsh
 cosmosDbConnString="[CONN STRING HERE]"
 serviceBusConnString="[CONN STRING HERE]"
 docker run -it --rm -p 5004:5004 --name inventory -e MongoDbSettings__Host=mongo -e RabbitMqSettings__Host=rabbitmq --network playinfra_default play.inventory:$version
@@ -133,7 +133,7 @@ and the accurate repository name (samphamplayeconomyacr.azurecr.io/play.inventor
 docker push: publishing image
 ```
 
-```mac
+```zsh
 acrName="samphamplayeconomyacr"
 
 az acr login --name $acrName
@@ -159,7 +159,7 @@ namespace: the namespace is nothing more than a way to separate the resources th
 you will have one namespace paired microservice in this case, we will put all the resources that belong to that specific microservice.
 ```
 
-```mac
+```zsh
 namespace="inventory"
 kubectl create namespace $namespace
 ```
@@ -233,7 +233,7 @@ It could be cetificates, it could be keys or it could be secrets. In this case i
 "--spn $IDENTITY_CLIENT_ID" And then the identity or the service principle that we want to grant these permissions into, is going to be our identity clientId
 ```
 
-```mac
+```zsh
 appname="playeconomy"
 keyVaultName="samphamplayeconomykv"
 namespace="inventory"
@@ -268,9 +268,79 @@ az identity federated-credential... --subject: your service account that you jus
 "system:serviceaccount:${namespace}:${namespace}-serviceaccount", the first $namespace, general case is just identity, and the second $namespace is the actual name of the service account which lives in kubernetes/identity.yaml and the ${namespace}-serviceaccount lives in $namespace (identity)
 ```
 
-```mac
+```zsh
 aksName="samphamplayeconomyaks"
 export AKS_OIDC_ISSUER="$(az aks show -n $aksName -g "${appname}" --query "oidcIssuerProfile.issuerUrl" -otsv)"
 
 az identity federated-credential create --name $namespace --identity-name $namespace --resource-group $appname --issuer $AKS_OIDC_ISSUER --subject "system:serviceaccount:${namespace}:${namespace}-serviceaccount" --audience api://AzureADTokenExchange
+```
+
+## Delete Kubernetes resources if using Helm chart
+Because we deploy our service to Kubernetes using kubectl, So the first thing is to delete one by one
+
+```
+kubectl delete deployment inventory-deployment -n $namespace
+kubectl delete service inventory-service -n $namespace
+kubectl delete serviceaccount inventory-serviceaccount -n $namespace
+
+kubectl get all -n $namespace (verify you delete all resources)
+```
+
+## Install the helm chart
+```powershell
+$acrName="samphamplayeconomyacr"
+$helmUser=[guid]::Empty.Guid (or helmUser=00000000-0000-0000-0000-000000000000)
+$helmPassword=az acr login --name $acrName --expose-token --output tsv --query accessToken
+$chartVersion="0.1.0"
+
+helm registry login "$acrName.azurecr.io" --username $helmUser --password $helmPassword (login to ACR)
+
+helm upgrade inventory-service oci://$acrName.azurecr.io/helm/microservice --version $chartVersion -f ./helm/values.yaml -n $namespace --install
+helm upgrade inventory-service oci://$acrName.azurecr.io/helm/microservice --version $chartVersion -f ./helm/values.yaml -n $namespace --install --debug
+or 
+helm upgrade inventory-service ./helm -f ./helm/values.yaml -n $namespace --install
+
+helm list -n $namespace
+helm repo update
+```
+- helm install indentity-service: "identity-service" is the name you want, this is the name of your release
+- ./helm: the location where you have your chart, which is your helm directory
+- -f ./helm/values.yaml: the value of your helm. Remember that values file is going to override all of the placeholders
+that we have defined directly into the template
+- after run the command above, we will see the result. the "REVISION" from the result is very insteresting because "REVISION"
+is going to keep track of any subsequent installations of this chart for your microservice in the future. So next time you
+run an installation of your microservice via this chart, it will say revision 2, and the revision 3, 4, and so on. And thanks
+to that, you will be able to roll back later on into a previous revision if something is just going wrong with the latest
+version of your microservice. So it's super interesting.
+- helm list -n $namespace: get a list of the installed charts at this point
+- $helmUser ...: Because we're going to acr, so we don't need to specify which username here. But we need to follow the
+convention, so we put Guid.Empty in the username.
+- $helmPassword ...: get password to login acr, --output tsv: the format from the output "--expose-token" is not approiate 
+to be used as the argument for the next line. So let's actually modify the output a little bit by using the "--output tsv"
+argument. So that it will give you a string that we can use in the next command.
+- --query accessToken: accessToken is one component of that output. So we only get only that piece as a string that we can 
+user later on
+- helm upgrade ... --install: the very first time if you don't have helm chart, it will install, the next time is to upgrade
+the helm chart version.
+- "oci://$acrName.azurecr.io/helm/microservice" is where you push your helm chart to ACR. "--version $chartVersion" is the
+version of your helm chart inside helm/microservice
+- "helm upgrad ... --install --debug": give you more information if upgrading service failed
+- "helm repo update": to make sure that all of your local cache charts are up to date.
+
+```zsh
+acrName="samphamplayeconomyacr"
+helmUser=00000000-0000-0000-0000-000000000000
+export helmPassword="$(az acr login --name $acrName --expose-token --output tsv --query accessToken)"
+chartVersion="0.1.0"
+
+helm registry login "$acrName.azurecr.io" --username $helmUser --password $helmPassword (login to ACR)
+
+helm upgrade inventory-service oci://$acrName.azurecr.io/helm/microservice --version $chartVersion -f ./helm/values.yaml -n $namespace --install
+helm upgrade inventory-service oci://$acrName.azurecr.io/helm/microservice --version $chartVersion -f ./helm/values.yaml -n $namespace --install --debug
+or 
+helm upgrade inventory-service ./helm -f ./helm/values.yaml -n $namespace --install
+
+helm list -n $namespace
+helm delete <release-name> -n $namespace
+helm repo update
 ```

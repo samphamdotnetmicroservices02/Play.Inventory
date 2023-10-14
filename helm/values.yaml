@@ -1,0 +1,27 @@
+microserviceName: "inventory"
+
+image:
+  repository: samphamplayeconomyacr.azurecr.io/play.inventory
+  tag: 1.0.4
+
+# this list of environment variables is just an array. So this is how you define an array in a yaml file. Each of the elements start
+# with dash, and then it has a name and a value for each of the elements in the array. And we could use this syntax if we wanted to
+# extract values from deploying.yaml. However, it is a better practice to instead of using an array, use a dictionary for other each
+# of these values, just so that in the future, when you want to override or expand one of the values in this list, you can easily
+# do with new values.yaml files or via other methods. So if each microservice want to define something extra, you can expand the list
+# in that sense. So that would be challenging with an array, but it is toally doable via a dictionary. So, how do we turn this array
+# into a dictionary?
+# envVariables:
+#   - name: ServiceSettings__MessageBroker
+#     value: SERVICEBUS
+#   - name: ServiceSettings__KeyVaultName
+#     value: samphamplayeconomykv
+
+# Now we turn array into a dictionary
+envVariables:
+  ServiceSettings__Authority: https://samphamplayeconomyapigateway.eastus.cloudapp.azure.com/identity-svc
+
+container:
+  port: 5004
+
+identityClientId: 489c8736-b638-4850-a5ea-d66d43b3e1c4

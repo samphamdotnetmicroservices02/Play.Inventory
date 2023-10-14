@@ -1,0 +1,12 @@
+So what we're going to do is to start splitting these yaml files (identity.yaml, signing-cer.yaml) into new files that are going to
+start following the structure that is required for the Helm chart.
+So the first thing we're going to do is to create at the root of our repository, we're going to call "helm" (folder), and inside this
+directory we're going to create anothe directory that we're going to call templates.
+All Helm charts are based on templates where you can define the structure of your Kubernetes application, and in there you can leave 
+place holders to replace values at the time where you are going to install this application in Kubernetes
+
+After copy all files in to kubernetes directory to helm/templates directory
+Now the idea of these templates is, like I said we're going to leave placeholders in these files so that they become templates
+as opposed to concrete a specifications of various specific resources. However, if these are going to be templates there has to be 
+some place where we can define a specific values that we're going to inject into a template. So that place is what we call the values files,
+and that's a file we have to create in the root helm directory
