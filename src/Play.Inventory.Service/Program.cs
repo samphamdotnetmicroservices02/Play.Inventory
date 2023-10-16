@@ -19,7 +19,7 @@ namespace Play.Inventory.Service
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
-                //.ConfigureAzureKeyVault()
+                .ConfigureAzureKeyVault()
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.UseStartup<Startup>();
