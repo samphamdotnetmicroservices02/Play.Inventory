@@ -73,9 +73,39 @@ jobs:
 
     env:
       ACR_NAME: samphamplayeconomyacr
+      AKS_NAME: samphamplayeconomyaks
+      SERVICE_NAME: inventory
+      HELM_CHART_VERSION: 0.1.0
+      
+    # The way we're going to enable authentication from Github into Azure is by following the OpenId Connect framework
+    # which is now supported by Github. And as part of this framework, what needs to be created is an Id token. That's
+    # going to have all the permissions necessary for the Github actions to interact with Azure.
+    permissions:
+      # this id-token: write allows for the actual creation and writing into the ID token that's going to be generated.
+      # So you need to specify here or nothing else is going to work.
+      id-token: write
+      # this allows is for the access token to be able to actually read and clone contents of our GitHub repository.
+      contents: read
     
     steps:
       - uses: actions/checkout@v3
+
+      - name: Azure Login
+        uses: Azure/login@v1.4.6
+        # Log in to Azure using OIDC
+        with:
+          # Client-id is the id we just created service principal. Navigating to Microsoft Entra ID (Azure Active Directory),
+          # --> App Registrations --> at the "GitHub" row, copy the value at the column "Application (client) ID" and paste here
+          # But this value should store in secrets.
+          client-id: ${{secrets.AZURE_CLIENT_ID}}
+          # the tenant-id is it refers directly to the ID of the active directory organization that has been created for your Azure
+          # account. Navigating to Microsoft Entra ID (Azure Active Directory), Tenant ID will be displayed here.
+          tenant-id: ${{secrets.AZURE_TENANT_ID}}
+          # subscription-id: navigating to your subscription and selecting subscritionId
+          subscription-id: ${{secrets.AZURE_SUBSCRIPTION_ID}}
+
+      - name: Login to Container Registry
+        run: az acr login --name ${{env.ACR_NAME}}
       
       - name: Build and push Docker image
         uses: docker/build-push-action@v5.0.0
@@ -85,4 +115,45 @@ jobs:
           secrets: | 
             "GH_OWNER=${{github.repository_owner}}"
             "GH_PAT=${{secrets.GH_PAT}}"
-          tags: ${{env.ACR_NAME}}.azurecr.io/play.inventory:${{ needs.generate-version.outputs.new_version }}
+          tags: ${{env.ACR_NAME}}.azurecr.io/play.${{env.SERVICE_NAME}}:${{ needs.generate-version.outputs.new_version }}
+          push: true
+
+      - name: Get AKS Credentials
+        # retrieve the information to connect to AKS cluster into the local file system of the machine that's running workflow
+        run: az aks get-credentials --resource-group ${{env.ACR_NAME}} --name ${{env.AKS_NAME}}
+
+      # an action that retrieves the Helm binaries into the workflow itself. Because this workflow so far, doesn't know about
+      # the Helm tool, and we need that tool in order to deploy the microservices to Kubernetes
+      - name: Helm tool installer
+        uses: Azure/setup-helm@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      # Now we need to log in into the Helm registry that is hosted into our ACR. Remember that our Helm chart is already published
+      # into the ACR. We just need to download it, in this case, into the workflow machine, so that we can use it.
+      - name: Login to Helm Registry
+        run: | 
+          helmUser="00000000-0000-0000-0000-000000000000"
+          helmPassword=$(az acr login --name ${{env.ACR_NAME}} --expose-token --output tsv --query accessToken)
+          helm registry login ${{env.ACR_NAME}}.azurecr.io --username $helmUser --password $helmPassword
+
+      - name: Deploy Helm chart
+        # --set image.tag: image.tag comes from helm/values.yaml, which is the version of the image. So whenever CI/CD builds and deploys
+        # the new image, we also need to get that new version of the image for helm, hence we override that version using "--set", and
+        # this feature comes from helm
+        # --wait: this helm upgrade command does not finish or does not return the result until the pod have successfully completed. 
+        # Because nomally what we have done in the command line manually in our box is to just run the command and then we explore
+        # and keep querying the pods to see until they actually succeed in getting deployed. But in the CI/CD pipeline, ideally you want
+        # to just not let the pipeline complete until the complete deployment has succeeded and the pod is ready to go. "--wait" will make
+        # it so that helm upgrade will not complete and will not return the control into the workflow execution until the entire set of pods
+        # have been deployed.
+        run: |
+          helm upgrade \
+          ${{env.SERVICE_NAME}}-service \
+          oci://${{env.ACR_NAME}}.azurecr.io/helm/microservice \
+          --version ${{env.HELM_CHART_VERSION}} \
+          -f helm/values.yaml \
+          -n ${{env.SERVICE_NAME}} \
+          --set image.tag=${{ needs.generate-version.outputs.new_version }} \
+          --install \
+          --wait
