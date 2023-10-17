@@ -21,6 +21,7 @@ using Polly.Extensions.Http;
 using Polly.Timeout;
 using GreenPipes.Configurators;
 using Play.Common.HealthChecks;
+using Play.Common.Logging;
 
 namespace Play.Inventory.Service
 {
@@ -68,6 +69,8 @@ namespace Play.Inventory.Service
 
             services.AddHealthChecks()
                 .AddMongoDb();
+
+            services.AddSeqLogging(Configuration);
         }
 
 
