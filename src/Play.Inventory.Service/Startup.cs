@@ -1,7 +1,6 @@
 using System;
 using System.Net.Http;
 using DnsClient.Internal;
-using GreenPipes;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -19,8 +18,8 @@ using Polly;
 using Polly.CircuitBreaker;
 using Polly.Extensions.Http;
 using Polly.Timeout;
-using GreenPipes.Configurators;
 using Play.Common.HealthChecks;
+using MassTransit;
 using Play.Common.Logging;
 
 namespace Play.Inventory.Service
