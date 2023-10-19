@@ -21,6 +21,7 @@ using Polly.Timeout;
 using Play.Common.HealthChecks;
 using MassTransit;
 using Play.Common.Logging;
+using Play.Common.OpenTelemetry;
 
 namespace Play.Inventory.Service
 {
@@ -69,7 +70,8 @@ namespace Play.Inventory.Service
             services.AddHealthChecks()
                 .AddMongoDb();
 
-            services.AddSeqLogging(Configuration);
+            services.AddSeqLogging(Configuration)
+                .AddTracing(Configuration);
         }
 
 
