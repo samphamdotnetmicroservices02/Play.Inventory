@@ -2,7 +2,7 @@ microserviceName: "inventory"
 
 image:
   repository: samphamplayeconomyacr.azurecr.io/play.inventory
-  tag: 1.0.8
+  tag: 1.0.12
 
 # this list of environment variables is just an array. So this is how you define an array in a yaml file. Each of the elements start
 # with dash, and then it has a name and a value for each of the elements in the array. And we could use this syntax if we wanted to
