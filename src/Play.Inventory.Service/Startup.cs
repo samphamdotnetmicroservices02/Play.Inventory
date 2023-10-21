@@ -71,7 +71,8 @@ namespace Play.Inventory.Service
                 .AddMongoDb();
 
             services.AddSeqLogging(Configuration)
-                .AddTracing(Configuration);
+                .AddTracing(Configuration)
+                .AddMetrics(Configuration);
         }
 
 
@@ -90,6 +91,16 @@ namespace Play.Inventory.Service
                         .AllowAnyMethod(); //Allows any the methods the client side want to use including GET, POST, PUT and all other verbs
                 });
             }
+
+            /*
+            * Prometheus:
+            * With the metrics side, we also need to do one more thing and that is to enable or create or expose what's going to
+            * be called the scraping endpoint. So this is the endpoint that tools like Prometheus can use in a giving interval,
+            * start pulling down and pulling into Prometheus, the metrics that we've been collecting across the lifetime of the
+            * application. This "UseOpenTelemetryPrometheusScrapingEndpoint" is going to stand up that endpoint that it actually
+            * ends with /metrics. You can configure it if you want to, for us, that's going to be good enough
+            */
+            app.UseOpenTelemetryPrometheusScrapingEndpoint();
 
             app.UseHttpsRedirection();
 

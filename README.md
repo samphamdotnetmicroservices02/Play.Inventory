@@ -291,7 +291,7 @@ kubectl get all -n $namespace (verify you delete all resources)
 $acrName="samphamplayeconomyacr"
 $helmUser=[guid]::Empty.Guid (or helmUser=00000000-0000-0000-0000-000000000000)
 $helmPassword=az acr login --name $acrName --expose-token --output tsv --query accessToken
-$chartVersion="0.1.2"
+$chartVersion="0.1.3"
 
 helm registry login "$acrName.azurecr.io" --username $helmUser --password $helmPassword (login to ACR)
 
@@ -331,7 +331,7 @@ version of your helm chart inside helm/microservice
 acrName="samphamplayeconomyacr"
 helmUser=00000000-0000-0000-0000-000000000000
 export helmPassword="$(az acr login --name $acrName --expose-token --output tsv --query accessToken)"
-chartVersion="0.1.2"
+chartVersion="0.1.3"
 
 helm registry login "$acrName.azurecr.io" --username $helmUser --password $helmPassword (login to ACR)
 

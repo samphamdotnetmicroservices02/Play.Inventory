@@ -1,8 +1,12 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.Threading.Tasks;
 using MassTransit;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Play.Common;
+using Play.Common.Settings;
 using Play.Inventory.Contracts;
 using Play.Inventory.Service.Entities;
 using Play.Inventory.Service.Exceptions;
@@ -14,13 +18,26 @@ public class GrantItemsConsumer : IConsumer<GrantItems>
     private readonly IRepository<InventoryItem> _itemsRepository;
     private readonly IRepository<CatalogItem> _catalogItemsRepository;
     private readonly ILogger<GrantItemsConsumer> _logger;
+    private readonly Counter<int> _itemGrantedCounter;
 
 
-    public GrantItemsConsumer(IRepository<InventoryItem> itemsRepository, IRepository<CatalogItem> catalogItemsRepository, ILogger<GrantItemsConsumer> logger)
+    public GrantItemsConsumer(IRepository<InventoryItem> itemsRepository, 
+        IRepository<CatalogItem> catalogItemsRepository, 
+        ILogger<GrantItemsConsumer> logger,
+        IConfiguration configuration)
     {
         _itemsRepository = itemsRepository;
         _catalogItemsRepository = catalogItemsRepository;
         _logger = logger;
+
+        /*
+        * Premetheus: we're going to be needing the service name of our microservice to define what we call a Meter that will also
+        * lat us create the counters. The Meter is the entry point for all the metrics tracking of your microservice. So usually 
+        * you'll have at least one Meter that owns everything related to metrics in your microservice.
+        */
+        var settings = configuration.GetSection(nameof(ServiceSettings)).Get<ServiceSettings>();
+        Meter meter = new(settings.ServiceName);
+        _itemGrantedCounter = meter.CreateCounter<int>("ItemGranted");
     }
 
     public async Task Consume(ConsumeContext<GrantItems> context)
@@ -71,6 +88,8 @@ public class GrantItemsConsumer : IConsumer<GrantItems>
             inventoryItem.MessageIds.Add(context.MessageId.Value);
             await _itemsRepository.UpdateAsync(inventoryItem);
         }
+
+        _itemGrantedCounter.Add(1, new KeyValuePair<string, object>(nameof(message.CatalogItemId), message.CatalogItemId)); // boxing ItemId to object
 
         var itemsGrantedTask = context.Publish(new InventoryItemsGranted(message.CorrelationId));
         var inventoryUpdatedTask = context.Publish(new InventoryItemUpdated(inventoryItem.UserId, inventoryItem.CatalogItemId, inventoryItem.Quantity));

@@ -5,7 +5,7 @@ name: CICD
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   generate-version:
@@ -14,27 +14,26 @@ jobs:
     # this permissions uses for bumping the version
     permissions:
       contents: write
-    
+
     steps:
-    - uses: actions/checkout@v3
-    - name: Github Tag Bump
-      id: tag_bump
-      uses: anothrNick/github-tag-action@1.67.0
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        INITIAL_VERSION: 1.0.1
-        # 1.0.1, the first one "1" is the major, the second "0" is the minor, and the last one "1" is the patch
-        # DEFAULT_BUMP is whenever we make changes, it will increse one more number and the number we want to 
-        # increse is path, so we put it in "DEFAULT_BUMP"
-        DEFAULT_BUMP: patch
+      - uses: actions/checkout@v3
+      - name: Github Tag Bump
+        id: tag_bump
+        uses: anothrNick/github-tag-action@1.67.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INITIAL_VERSION: 1.0.1
+          # 1.0.1, the first one "1" is the major, the second "0" is the minor, and the last one "1" is the patch
+          # DEFAULT_BUMP is whenever we make changes, it will increse one more number and the number we want to
+          # increse is path, so we put it in "DEFAULT_BUMP"
+          DEFAULT_BUMP: patch
 
     outputs:
-      # steps.tag_bump.outputs.new_tag is the outputs from tag_bump and it has the new_tag as documented in 
+      # steps.tag_bump.outputs.new_tag is the outputs from tag_bump and it has the new_tag as documented in
       # anothrNick/github-tag-action@1.67.0 that we use above (please check document)
       new_version: ${{ steps.tag_bump.outputs.new_tag }}
-  
-  package-and-publish-contracts:
 
+  package-and-publish-contracts:
     runs-on: ubuntu-latest
     needs: generate-version
 
@@ -44,28 +43,28 @@ jobs:
       packages: write
 
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v3
-      with:
-        dotnet-version: 7.0.x
-        source-url: https://nuget.pkg.github.com/${{github.repository_owner}}/index.json
-      env:
-        # this "NUGET_AUTH_TOKEN" environment variable that the Nuget client already understands and he knows
-        # that if it finds a token over there, it will use it to authenticate with whatever sources it has to
-        # use.
-        NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Pack
-      run: | 
-        dotnet pack src/Play.Inventory.Contracts/ \
-        --configuration Release \
-        -p:PackageVersion=${{ needs.generate-version.outputs.new_version }} \
-        -p:RepositoryUrl=https://github.com/${{github.repository_owner}}/Play.Inventory \
-        -o packages
-    - name: Publish
-      run: dotnet nuget push packages/*.nupkg
+      - uses: actions/checkout@v3
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 7.0.x
+          source-url: https://nuget.pkg.github.com/${{github.repository_owner}}/index.json
+        env:
+          # this "NUGET_AUTH_TOKEN" environment variable that the Nuget client already understands and he knows
+          # that if it finds a token over there, it will use it to authenticate with whatever sources it has to
+          # use.
+          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pack
+        run: |
+          dotnet pack src/Play.Inventory.Contracts/ \
+          --configuration Release \
+          -p:PackageVersion=${{ needs.generate-version.outputs.new_version }} \
+          -p:RepositoryUrl=https://github.com/${{github.repository_owner}}/Play.Inventory \
+          -o packages
+      - name: Publish
+        run: dotnet nuget push packages/*.nupkg
 
   build-and-deploy-service:
     runs-on: ubuntu-latest
@@ -75,8 +74,8 @@ jobs:
       ACR_NAME: samphamplayeconomyacr
       AKS_NAME: samphamplayeconomyaks
       SERVICE_NAME: inventory
-      HELM_CHART_VERSION: 0.1.2
-      
+      HELM_CHART_VERSION: 0.1.3
+
     # The way we're going to enable authentication from Github into Azure is by following the OpenId Connect framework
     # which is now supported by Github. And as part of this framework, what needs to be created is an Id token. That's
     # going to have all the permissions necessary for the Github actions to interact with Azure.
@@ -86,7 +85,7 @@ jobs:
       id-token: write
       # this allows is for the access token to be able to actually read and clone contents of our GitHub repository.
       contents: read
-    
+
     steps:
       - uses: actions/checkout@v3
 
@@ -106,13 +105,13 @@ jobs:
 
       - name: Login to Container Registry
         run: az acr login --name ${{env.ACR_NAME}}
-      
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5.0.0
         with:
           # for GH_PAT, we cannot use secrets.GITHUB_TOKEN, because we will use Play.Common, and it belongs to
           # another repository, not in this repository
-          secrets: | 
+          secrets: |
             "GH_OWNER=${{github.repository_owner}}"
             "GH_PAT=${{secrets.GH_PAT}}"
           tags: ${{env.ACR_NAME}}.azurecr.io/play.${{env.SERVICE_NAME}}:${{ needs.generate-version.outputs.new_version }}
@@ -128,11 +127,11 @@ jobs:
         uses: Azure/setup-helm@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          
+
       # Now we need to log in into the Helm registry that is hosted into our ACR. Remember that our Helm chart is already published
       # into the ACR. We just need to download it, in this case, into the workflow machine, so that we can use it.
       - name: Login to Helm Registry
-        run: | 
+        run: |
           helmUser="00000000-0000-0000-0000-000000000000"
           helmPassword=$(az acr login --name ${{env.ACR_NAME}} --expose-token --output tsv --query accessToken)
           helm registry login ${{env.ACR_NAME}}.azurecr.io --username $helmUser --password $helmPassword
@@ -141,7 +140,7 @@ jobs:
         # --set image.tag: image.tag comes from helm/values.yaml, which is the version of the image. So whenever CI/CD builds and deploys
         # the new image, we also need to get that new version of the image for helm, hence we override that version using "--set", and
         # this feature comes from helm
-        # --wait: this helm upgrade command does not finish or does not return the result until the pod have successfully completed. 
+        # --wait: this helm upgrade command does not finish or does not return the result until the pod have successfully completed.
         # Because nomally what we have done in the command line manually in our box is to just run the command and then we explore
         # and keep querying the pods to see until they actually succeed in getting deployed. But in the CI/CD pipeline, ideally you want
         # to just not let the pipeline complete until the complete deployment has succeeded and the pod is ready to go. "--wait" will make
